@@ -1,0 +1,397 @@
+---
+- name: Restart SCOM Agent
+  hosts: your_host_group
+  tasks:
+    - name: Restart SCOM Agent
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -restart
+===============================================================
+sudo /opt/microsoft/scx/bin/tools/scxadmin -status
+
+================================================================
+---
+- name: Check SCOM Agent Status
+  hosts: your_host_group
+  tasks:
+    - name: Get SCOM Agent Status
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -status
+      register: scom_status
+
+    - name: Display SCOM Agent Status
+      debug:
+        var: scom_status.stdout
+===============================================================
+---
+- name: Ensure SCOM Agent is running
+  hosts: your_host_group
+  tasks:
+    - name: Check SCOM Agent Status
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -status
+      register: scom_status
+      retries: 5
+      delay: 10
+      until: scom_status.stdout.find('Running') != -1
+
+    - name: Start SCOM Agent if not running
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -start
+      when: scom_status.stdout.find('Stopped') != -1
+===========================================================
+---
+- name: Ensure SCOM Agent is running
+  hosts: your_host_group
+  tasks:
+    - name: Check SCOM Agent Status
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -status
+      register: scom_status
+
+    - name: Start SCOM Agent if stopped
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -start
+      when: scom_status.stdout.find('Stopped') != -1
+
+    - name: Restart SCOM Agent if running
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -restart
+      when: scom_status.stdout.find('Running') != -1
+================================================================
+---
+- name: Ensure SCOM Agent is running
+  hosts: your_host_group
+  tasks:
+    - name: Determine OS
+      become: yes
+      ansible.builtin.setup:
+      register: system_info
+
+    - name: Check SCOM Agent Status on Linux
+      when: system_info.ansible_facts['ansible_system'] == 'Linux'
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -status
+      register: scom_status
+
+    - name: Check SCOM Agent Status on Windows
+      when: system_info.ansible_facts['ansible_system'] == 'Windows'
+      become: yes
+      win_command: 'sc control HealthService state= query'
+      register: scom_status
+
+    - name: Start SCOM Agent on Linux if stopped
+      when: system_info.ansible_facts['ansible_system'] == 'Linux' and scom_status.stdout.find('Stopped') != -1
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -start
+
+    - name: Start SCOM Agent on Windows if stopped
+      when: system_info.ansible_facts['ansible_system'] == 'Windows' and scom_status.stdout.find('STOPPED') != -1
+      become: yes
+      win_service:
+        name: HealthService
+        state: started
+
+    - name: Restart SCOM Agent on Linux if running
+      when: system_info.ansible_facts['ansible_system'] == 'Linux' and scom_status.stdout.find('Running') != -1
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -restart
+
+    - name: Restart SCOM Agent on Windows if running
+      when: system_info.ansible_facts['ansible_system'] == 'Windows' and scom_status.stdout.find('RUNNING') != -1
+      become: yes
+      win_service:
+        name: HealthService
+        state: restarted
+==============================================================================================
+
+---
+- name: Ensure SCOM Agent is running (Linux)
+  hosts: linux_hosts
+  tasks:
+    - name: Check SCOM Agent Status on Linux
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -status
+      register: scom_status
+
+    - name: Start SCOM Agent on Linux if stopped
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -start
+      when: scom_status.stdout.find('Stopped') != -1
+
+    - name: Restart SCOM Agent on Linux if running
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -restart
+      when: scom_status.stdout.find('Running') != -1
+
+- name: Ensure SCOM Agent is running (Windows)
+  hosts: windows_hosts
+  tasks:
+    - name: Check SCOM Agent Status on Windows
+      become: yes
+      win_shell: 'sc query HealthService'
+      register: scom_status
+
+    - name: Start SCOM Agent on Windows if stopped
+      become: yes
+      win_service:
+        name: HealthService
+        state: started
+      when: scom_status.stdout.find('STOPPED') != -1
+
+    - name: Restart SCOM Agent on Windows if running
+      become: yes
+      win_service:
+        name: HealthService
+        state: restarted
+      when: scom_status.stdout.find('RUNNING') != -1
+==============================================================
+---
+- name: Ensure SCOM Agent is running (Linux)
+  hosts: linux_hosts
+  tasks:
+    - name: Check SCOM Agent Status on Linux
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -status
+      register: scom_status
+      ignore_errors: yes  # Continue if this command fails
+
+    - name: Debug SCOM status
+      debug:
+        var: scom_status
+
+    - name: Start SCOM Agent on Linux if stopped
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -start
+      when: 
+        - scom_status is defined
+        - scom_status.stdout is defined
+        - "'Stopped' in scom_status.stdout"  # More Pythonic way to check for substring
+
+    - name: Restart SCOM Agent on Linux if running
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -restart
+      when: 
+        - scom_status is defined
+        - scom_status.stdout is defined
+        - "'Running' in scom_status.stdout"  # More Pythonic way
+
+
+=========================================================================
+---
+- name: Ensure SCOM Agent is running (Windows)
+  hosts: windows_hosts
+  tasks:
+    - name: Check SCOM Agent Status on Windows
+      win_shell: |
+        Get-Service -Name "SCMService" | Select-Object -ExpandProperty Status
+      register: scom_status
+      ignore_errors: yes  # Continue if this command fails
+
+    - name: Debug SCOM status
+      debug:
+        var: scom_status
+
+    - name: Start SCOM Agent on Windows if stopped
+      win_service:
+        name: "SCMService"
+        state: started
+      when: 
+        - scom_status is defined
+        - scom_status.stdout is defined
+        - scom_status.stdout == 'Stopped'  # Check if the status is 'Stopped'
+
+    - name: Restart SCOM Agent on Windows if running
+      win_service:
+        name: "SCMService"
+        state: restarted
+      when: 
+        - scom_status is defined
+        - scom_status.stdout is defined
+        - scom_status.stdout == 'Running'  # Check if the status is 'Running'
+
+=========================================================================
+
+---
+- name: Ensure SCOM Agent is running (Linux and Windows)
+  hosts: all
+  tasks:
+    - name: Check SCOM Agent Status
+      become: yes
+      when: ansible_os_family == 'Linux'
+      command: /opt/microsoft/scx/bin/tools/scxadmin -status
+      register: scom_status_linux
+      ignore_errors: yes
+
+    - name: Check SCOM Agent Status on Windows
+      when: ansible_os_family == 'Windows'
+      win_shell: |
+        Get-Service -Name "SCMService" | Select-Object -ExpandProperty Status
+      register: scom_status_windows
+      ignore_errors: yes
+
+    - name: Debug SCOM status on Linux
+      debug:
+        var: scom_status_linux
+      when: ansible_os_family == 'Linux'
+
+    - name: Debug SCOM status on Windows
+      debug:
+        var: scom_status_windows
+      when: ansible_os_family == 'Windows'
+
+    - name: Start SCOM Agent on Linux if stopped
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -start
+      when: 
+        - ansible_os_family == 'Linux'
+        - scom_status_linux is defined
+        - scom_status_linux.stdout is defined
+        - "'Stopped' in scom_status_linux.stdout"
+
+    - name: Restart SCOM Agent on Linux if running
+      become: yes
+      command: /opt/microsoft/scx/bin/tools/scxadmin -restart
+      when: 
+        - ansible_os_family == 'Linux'
+        - scom_status_linux is defined
+        - scom_status_linux.stdout is defined
+        - "'Running' in scom_status_linux.stdout"
+
+    - name: Start SCOM Agent on Windows if stopped
+      win_service:
+        name: "SCMService"
+        state: started
+      when: 
+        - ansible_os_family == 'Windows'
+        - scom_status_windows is defined
+        - scom_status_windows.stdout is defined
+        - scom_status_windows.stdout == 'Stopped'
+
+    - name: Restart SCOM Agent on Windows if running
+      win_service:
+        name: "SCMService"
+        state: restarted
+      when: 
+        - ansible_os_family == 'Windows'
+        - scom_status_windows is defined
+        - scom_status_windows.stdout is defined
+        - scom_status_windows.stdout == 'Running'
+
+==============================================================
+---
+- name: Ensure time synchronization services are running
+  hosts: all
+  tasks:
+    - name: Check NTP service status on Linux
+      when: ansible_os_family == "Linux"
+      become: yes
+      command: systemctl status ntp
+      register: ntp_status
+      ignore_errors: yes  # Continue if this command fails
+
+    - name: Debug NTP status on Linux
+      when: ansible_os_family == "Linux"
+      debug:
+        var: ntp_status
+
+    - name: Start NTP service if it is stopped (Linux)
+      when: 
+        - ansible_os_family == "Linux"
+        - ntp_status is defined
+        - ntp_status.stdout is defined
+        - "'inactive (dead)' in ntp_status.stdout"
+      become: yes
+      command: systemctl start ntp
+
+    - name: Restart NTP service if it is running (Linux)
+      when: 
+        - ansible_os_family == "Linux"
+        - ntp_status is defined
+        - ntp_status.stdout is defined
+        - "'active (running)' in ntp_status.stdout"
+      become: yes
+      command: systemctl restart ntp
+
+    - name: Check Windows Time Service status
+      when: ansible_os_family == "Windows"
+      win_service:
+        name: w32time
+      register: w32time_status
+
+    - name: Debug Windows Time Service status
+      when: ansible_os_family == "Windows"
+      debug:
+        var: w32time_status
+
+    - name: Start Windows Time Service if it is stopped
+      when: 
+        - ansible_os_family == "Windows"
+        - w32time_status.state != 'running'
+      win_service:
+        name: w32time
+        state: started
+
+    - name: Restart Windows Time Service if it is running
+      when: 
+        - ansible_os_family == "Windows"
+        - w32time_status.state == 'running'
+      win_service:
+        name: w32time
+        state: restarted
+++++=========================================================
+
+---
+- name: Ensure NTP service is running (Linux)
+  hosts: linux_hosts
+  tasks:
+    - name: Check NTP service status
+      become: yes
+      command: systemctl status ntp
+      register: ntp_status
+      ignore_errors: yes  # Continue if this command fails
+
+    - name: Debug NTP status
+      debug:
+        var: ntp_status
+
+    - name: Start NTP service if it is stopped
+      become: yes
+      command: systemctl start ntp
+      when: 
+        - ntp_status is defined
+        - ntp_status.stdout is defined
+        - "'inactive (dead)' in ntp_status.stdout"
+
+    - name: Restart NTP service if it is running
+      become: yes
+      command: systemctl restart ntp
+      when: 
+        - ntp_status is defined
+        - ntp_status.stdout is defined
+        - "'active (running)' in ntp_status.stdout"
+====--=====-=========
+---
+- name: Ensure Windows Time Service is running
+  hosts: windows_hosts
+  tasks:
+    - name: Check Windows Time Service status
+      win_service:
+        name: w32time
+      register: w32time_status
+
+    - name: Debug Windows Time Service status
+      debug:
+        var: w32time_status
+
+    - name: Start Windows Time Service if it is stopped
+      win_service:
+        name: w32time
+        state: started
+      when: w32time_status.state != 'running'
+
+    - name: Restart Windows Time Service if it is running
+      win_service:
+        name: w32time
+        state: restarted
+      when: w32time_status.state == 'running'
+=--=================================
