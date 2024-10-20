@@ -1,0 +1,26 @@
+[linux]
+192.168.56.134
+
+[linux:vars]
+ansible_user=shubh
+ansible_ssh_pass=1234
+ansible_become_pass=1234
+
+
+
+# Here's another example of host ranges, this time there are no
+# leading 0s:
+
+## db-[99:101]-node.example.com
+[win]
+192.168.56.131
+
+[win:vars]
+ansible_user=jenkins
+ansible_password=Jenkins1234$
+ansible_connection=winrm
+ansible_winrm_server_cert_validation=ignore
+ansible_port=5986
+ansible_python_interpreter=/usr/bin/python3
+ansible_winrm_read_timeout_sec=300
+ansible_winrm_operation_timeout_sec=150
