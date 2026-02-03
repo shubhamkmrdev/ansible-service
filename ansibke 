@@ -1,0 +1,32 @@
+- name: Match hostname and extract UID
+  hosts: all
+  gather_facts: yes
+
+  tasks:
+    - name: Read CSV
+      community.general.read_csv:
+        path: servers.csv
+      register: csv_data
+
+    - name: Get UID matching current host
+      set_fact:
+        server_uid: >-
+          {{ csv_data.list
+             | selectattr('hostname', 'equalto', ansible_hostname)
+             | map(attribute='uid')
+             | first }}
+
+
+
+- name: Show UID
+      debug:
+        msg: "UID for {{ ansible_hostname }} is {{ server_uid }}"
+
+
+- set_fact:
+    server_uid: >-
+      {{ csv_data.list
+         | selectattr('hostname', 'equalto', ansible_hostname)
+         | map(attribute='uid')
+         | first
+         | default('NA') }}
